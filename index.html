@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Notes</title>
+    <title>Universal Notes</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -25,12 +25,6 @@
             border: 1px solid #ccc;
             border-radius: 4px;
             background: #f9f9f9;
-            cursor: grab;
-        }
-        .note-block:focus {
-            outline: none;
-            border: 1px solid #007BFF;
-            background: white;
         }
         .toolbar {
             display: flex;
@@ -45,9 +39,6 @@
             border: none;
             border-radius: 4px;
             cursor: pointer;
-        }
-        button:hover {
-            background: #0056b3;
         }
     </style>
 </head>
@@ -68,63 +59,89 @@
         const exportNotesButton = document.getElementById('exportNotes');
         const importNotesInput = document.getElementById('importNotes');
 
-        let notes = JSON.parse(localStorage.getItem('secureNotes')) || [];
+        let notes = JSON.parse(localStorage.getItem('universalNotes')) || [];
+
+        // Generate a UUID
+        function generateUUID() {
+            return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+                (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+            );
+        }
+
+        // Hash the content
+        async function hashContent(content) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(content);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
 
         // Save notes to localStorage
         function saveNotes() {
-            localStorage.setItem('secureNotes', JSON.stringify(notes));
+            localStorage.setItem('universalNotes', JSON.stringify(notes));
         }
 
         // Render notes
-        function renderNotes() {
+        async function renderNotes() {
             notesContainer.innerHTML = '';
-            notes.forEach((note, index) => {
+            for (const note of notes) {
                 const noteBlock = document.createElement('div');
                 noteBlock.contentEditable = true;
                 noteBlock.className = 'note-block';
-                noteBlock.textContent = note;
-                noteBlock.dataset.index = index;
+                noteBlock.textContent = note.content;
+                noteBlock.dataset.id = note.id;
 
-                noteBlock.addEventListener('input', () => {
-                    notes[index] = noteBlock.textContent;
+                noteBlock.addEventListener('input', async () => {
+                    note.content = noteBlock.textContent;
+                    note.hash = await hashContent(note.content);
                     saveNotes();
                 });
 
                 notesContainer.appendChild(noteBlock);
-            });
+            }
         }
 
-        // Add new note
-        addNoteButton.addEventListener('click', () => {
-            notes.push('New Note');
+        // Add a new note
+        addNoteButton.addEventListener('click', async () => {
+            const newNote = {
+                id: generateUUID(),
+                content: 'New Note',
+                hash: await hashContent('New Note'),
+            };
+            notes.push(newNote);
             saveNotes();
             renderNotes();
         });
 
-        // Export notes as JSON
+        // Export notes
         exportNotesButton.addEventListener('click', () => {
             const blob = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `notes-backup-${new Date().toISOString()}.json`;
+            link.download = 'notes-backup.json';
             link.click();
             URL.revokeObjectURL(url);
         });
 
-        // Import notes from JSON
+        // Import notes
         importNotesInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = (e) => {
-                    try {
-                        notes = JSON.parse(e.target.result);
-                        saveNotes();
-                        renderNotes();
-                    } catch (error) {
-                        alert('Invalid JSON file');
+                reader.onload = async (e) => {
+                    const importedNotes = JSON.parse(e.target.result);
+
+                    // Merge notes based on ID and hash
+                    for (const importedNote of importedNotes) {
+                        const existingNote = notes.find(n => n.id === importedNote.id);
+                        if (!existingNote || existingNote.hash !== importedNote.hash) {
+                            notes.push(importedNote);
+                        }
                     }
+
+                    saveNotes();
+                    renderNotes();
                 };
                 reader.readAsText(file);
             }
@@ -135,4 +152,5 @@
     </script>
 </body>
 </html>
+
 
