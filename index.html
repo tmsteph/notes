@@ -3,170 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Note-Taking App</title>
+    <title>Notion-Like Note-Taking App</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            background: #f0f0f0;
+            background-color: #f7f7f7;
         }
-        .container {
-            width: 90%;
+        .app {
             max-width: 800px;
-            background: white;
+            margin: 20px auto;
             padding: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background: white;
             border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-        textarea {
-            width: 100%;
-            height: 300px;
-            margin-top: 10px;
+        .note-block {
+            margin: 10px 0;
             padding: 10px;
-            font-size: 16px;
             border: 1px solid #ccc;
             border-radius: 4px;
-            resize: none;
+            background: #f9f9f9;
+            cursor: grab;
         }
-        .buttons {
-            margin-top: 10px;
+        .note-block:focus {
+            outline: none;
+            border: 1px solid #007BFF;
+            background: white;
+        }
+        .toolbar {
             display: flex;
             justify-content: space-between;
-            flex-wrap: wrap;
+            margin-bottom: 10px;
         }
         button {
             padding: 10px 15px;
             font-size: 16px;
-            color: white;
             background: #007BFF;
+            color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            margin: 5px;
         }
         button:hover {
             background: #0056b3;
         }
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        input[type="file"] {
-            display: none;
-        }
-        label {
-            padding: 10px 15px;
-            font-size: 16px;
-            color: white;
-            background: #28a745;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 5px;
-            display: inline-block;
-        }
-        label:hover {
-            background: #218838;
-        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>My Notes</h1>
-        <textarea id="noteArea" placeholder="Type your note here..."></textarea>
-        <div class="buttons">
-            <button id="saveBtn">Save Note</button>
-            <button id="clearBtn">Clear Notes</button>
-            <button id="exportJsonBtn">Export as JSON</button>
-            <button id="exportTxtBtn">Export as TXT</button>
-            <label for="importJson">Import JSON</label>
-            <input type="file" id="importJson" accept=".json">
+    <div class="app">
+        <div class="toolbar">
+            <button id="addNote">Add Block</button>
+            <button id="exportNotes">Export</button>
+            <input type="file" id="importNotes" accept=".json" style="display: none;">
+            <label for="importNotes" style="cursor: pointer;">Import</label>
         </div>
+        <div id="notesContainer"></div>
     </div>
 
     <script>
-        const noteArea = document.getElementById('noteArea');
-        const saveBtn = document.getElementById('saveBtn');
-        const clearBtn = document.getElementById('clearBtn');
-        const exportJsonBtn = document.getElementById('exportJsonBtn');
-        const exportTxtBtn = document.getElementById('exportTxtBtn');
-        const importJson = document.getElementById('importJson');
+        const notesContainer = document.getElementById('notesContainer');
+        const addNoteButton = document.getElementById('addNote');
+        const exportNotesButton = document.getElementById('exportNotes');
+        const importNotesInput = document.getElementById('importNotes');
 
-        // Load saved notes on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            const savedNote = localStorage.getItem('myNote');
-            if (savedNote) {
-                noteArea.value = savedNote;
-            }
-        });
+        let notes = JSON.parse(localStorage.getItem('notionNotes')) || [];
+
+        // Render notes
+        function renderNotes() {
+            notesContainer.innerHTML = '';
+            notes.forEach((note, index) => {
+                const noteBlock = document.createElement('div');
+                noteBlock.contentEditable = true;
+                noteBlock.className = 'note-block';
+                noteBlock.textContent = note;
+                noteBlock.dataset.index = index;
+
+                noteBlock.addEventListener('input', () => {
+                    notes[index] = noteBlock.textContent;
+                    saveNotes();
+                });
+
+                noteBlock.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', index);
+                });
+
+                noteBlock.draggable = true;
+                notesContainer.appendChild(noteBlock);
+            });
+        }
 
         // Save notes to localStorage
-        saveBtn.addEventListener('click', () => {
-            const noteContent = noteArea.value;
-            localStorage.setItem('myNote', noteContent);
-            alert('Note saved!');
+        function saveNotes() {
+            localStorage.setItem('notionNotes', JSON.stringify(notes));
+        }
+
+        // Add a new note block
+        addNoteButton.addEventListener('click', () => {
+            notes.push('New Block');
+            saveNotes();
+            renderNotes();
         });
 
-        // Clear notes from localStorage and textarea
-        clearBtn.addEventListener('click', () => {
-            if (confirm('Are you sure you want to clear your notes?')) {
-                localStorage.removeItem('myNote');
-                noteArea.value = '';
-                alert('Notes cleared!');
-            }
-        });
-
-        // Export notes as JSON
-        exportJsonBtn.addEventListener('click', () => {
-            const noteContent = noteArea.value;
-            const blob = new Blob([JSON.stringify({ note: noteContent }, null, 2)], { type: 'application/json' });
+        // Export notes
+        exportNotesButton.addEventListener('click', () => {
+            const blob = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = 'my_notes.json';
+            link.download = 'notes.json';
             link.click();
             URL.revokeObjectURL(url);
         });
 
-        // Export notes as TXT
-        exportTxtBtn.addEventListener('click', () => {
-            const noteContent = noteArea.value;
-            const blob = new Blob([noteContent], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'my_notes.txt';
-            link.click();
-            URL.revokeObjectURL(url);
-        });
-
-        // Import notes from JSON
-        importJson.addEventListener('change', (event) => {
+        // Import notes
+        importNotesInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     try {
-                        const importedData = JSON.parse(e.target.result);
-                        if (importedData.note !== undefined) {
-                            noteArea.value = importedData.note;
-                            localStorage.setItem('myNote', importedData.note);
-                            alert('Note imported successfully!');
-                        } else {
-                            alert('Invalid JSON file format.');
-                        }
+                        notes = JSON.parse(e.target.result);
+                        saveNotes();
+                        renderNotes();
                     } catch (error) {
-                        alert('Error reading JSON file.');
+                        alert('Error importing notes');
                     }
                 };
                 reader.readAsText(file);
             }
         });
+
+        // Drag-and-drop reordering
+        notesContainer.addEventListener('dragover', (e) => e.preventDefault());
+        notesContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const draggedIndex = e.dataTransfer.getData('text/plain');
+            const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+            if (dropTarget && dropTarget.classList.contains('note-block')) {
+                const targetIndex = dropTarget.dataset.index;
+                const draggedNote = notes.splice(draggedIndex, 1)[0];
+                notes.splice(targetIndex, 0, draggedNote);
+                saveNotes();
+                renderNotes();
+            }
+        });
+
+        // Initial render
+        renderNotes();
     </script>
 </body>
 </html>
+
