@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notion-Like Note-Taking App</title>
+    <title>Secure Notes</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -54,10 +54,10 @@
 <body>
     <div class="app">
         <div class="toolbar">
-            <button id="addNote">Add Block</button>
-            <button id="exportNotes">Export</button>
+            <button id="addNote">Add Note</button>
+            <button id="exportNotes">Backup Notes</button>
             <input type="file" id="importNotes" accept=".json" style="display: none;">
-            <label for="importNotes" style="cursor: pointer;">Import</label>
+            <label for="importNotes" style="cursor: pointer;">Restore Notes</label>
         </div>
         <div id="notesContainer"></div>
     </div>
@@ -68,7 +68,12 @@
         const exportNotesButton = document.getElementById('exportNotes');
         const importNotesInput = document.getElementById('importNotes');
 
-        let notes = JSON.parse(localStorage.getItem('notionNotes')) || [];
+        let notes = JSON.parse(localStorage.getItem('secureNotes')) || [];
+
+        // Save notes to localStorage
+        function saveNotes() {
+            localStorage.setItem('secureNotes', JSON.stringify(notes));
+        }
 
         // Render notes
         function renderNotes() {
@@ -85,39 +90,29 @@
                     saveNotes();
                 });
 
-                noteBlock.addEventListener('dragstart', (e) => {
-                    e.dataTransfer.setData('text/plain', index);
-                });
-
-                noteBlock.draggable = true;
                 notesContainer.appendChild(noteBlock);
             });
         }
 
-        // Save notes to localStorage
-        function saveNotes() {
-            localStorage.setItem('notionNotes', JSON.stringify(notes));
-        }
-
-        // Add a new note block
+        // Add new note
         addNoteButton.addEventListener('click', () => {
-            notes.push('New Block');
+            notes.push('New Note');
             saveNotes();
             renderNotes();
         });
 
-        // Export notes
+        // Export notes as JSON
         exportNotesButton.addEventListener('click', () => {
             const blob = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = 'notes.json';
+            link.download = `notes-backup-${new Date().toISOString()}.json`;
             link.click();
             URL.revokeObjectURL(url);
         });
 
-        // Import notes
+        // Import notes from JSON
         importNotesInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file) {
@@ -128,25 +123,10 @@
                         saveNotes();
                         renderNotes();
                     } catch (error) {
-                        alert('Error importing notes');
+                        alert('Invalid JSON file');
                     }
                 };
                 reader.readAsText(file);
-            }
-        });
-
-        // Drag-and-drop reordering
-        notesContainer.addEventListener('dragover', (e) => e.preventDefault());
-        notesContainer.addEventListener('drop', (e) => {
-            e.preventDefault();
-            const draggedIndex = e.dataTransfer.getData('text/plain');
-            const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
-            if (dropTarget && dropTarget.classList.contains('note-block')) {
-                const targetIndex = dropTarget.dataset.index;
-                const draggedNote = notes.splice(draggedIndex, 1)[0];
-                notes.splice(targetIndex, 0, draggedNote);
-                saveNotes();
-                renderNotes();
             }
         });
 
