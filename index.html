@@ -40,6 +40,15 @@
             border-radius: 4px;
             cursor: pointer;
         }
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin-top: 10px;
+            padding: 10px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -50,31 +59,25 @@
             <input type="file" id="importNotes" accept=".json" style="display: none;">
             <label for="importNotes" style="cursor: pointer;">Restore Notes</label>
         </div>
+
         <div id="notesContainer"></div>
+
+        <h3>Peer-to-Peer Sharing</h3>
+        <button id="sendNotes">Send Notes</button>
+        <button id="receiveNotes">Receive Notes</button>
+        <textarea id="signalInput" placeholder="Paste signal here"></textarea>
+        <button id="submitSignal">Submit Signal</button>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/simple-peer/simplepeer.min.js"></script>
     <script>
         const notesContainer = document.getElementById('notesContainer');
         const addNoteButton = document.getElementById('addNote');
         const exportNotesButton = document.getElementById('exportNotes');
         const importNotesInput = document.getElementById('importNotes');
 
+        let peer;
         let notes = JSON.parse(localStorage.getItem('universalNotes')) || [];
-
-        // Generate a UUID
-        function generateUUID() {
-            return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-                (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-            );
-        }
-
-        // Hash the content
-        async function hashContent(content) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(content);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-        }
 
         // Save notes to localStorage
         function saveNotes() {
@@ -82,33 +85,27 @@
         }
 
         // Render notes
-        async function renderNotes() {
+        function renderNotes() {
             notesContainer.innerHTML = '';
-            for (const note of notes) {
+            notes.forEach((note, index) => {
                 const noteBlock = document.createElement('div');
                 noteBlock.contentEditable = true;
                 noteBlock.className = 'note-block';
-                noteBlock.textContent = note.content;
-                noteBlock.dataset.id = note.id;
+                noteBlock.textContent = note;
+                noteBlock.dataset.index = index;
 
-                noteBlock.addEventListener('input', async () => {
-                    note.content = noteBlock.textContent;
-                    note.hash = await hashContent(note.content);
+                noteBlock.addEventListener('input', () => {
+                    notes[index] = noteBlock.textContent;
                     saveNotes();
                 });
 
                 notesContainer.appendChild(noteBlock);
-            }
+            });
         }
 
-        // Add a new note
-        addNoteButton.addEventListener('click', async () => {
-            const newNote = {
-                id: generateUUID(),
-                content: 'New Note',
-                hash: await hashContent('New Note'),
-            };
-            notes.push(newNote);
+        // Add new note
+        addNoteButton.addEventListener('click', () => {
+            notes.push('New Note');
             saveNotes();
             renderNotes();
         });
@@ -129,21 +126,50 @@
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = async (e) => {
+                reader.onload = (e) => {
                     const importedNotes = JSON.parse(e.target.result);
-
-                    // Merge notes based on ID and hash
-                    for (const importedNote of importedNotes) {
-                        const existingNote = notes.find(n => n.id === importedNote.id);
-                        if (!existingNote || existingNote.hash !== importedNote.hash) {
-                            notes.push(importedNote);
-                        }
-                    }
-
+                    notes = [...notes, ...importedNotes];
                     saveNotes();
                     renderNotes();
                 };
                 reader.readAsText(file);
+            }
+        });
+
+        // Peer-to-Peer Sharing
+        document.getElementById('sendNotes').addEventListener('click', () => {
+            peer = new SimplePeer({ initiator: true, trickle: false });
+
+            peer.on('signal', (data) => {
+                alert(`Share this signal with the recipient:\n\n${JSON.stringify(data)}`);
+            });
+
+            peer.on('connect', () => {
+                peer.send(JSON.stringify(notes));
+                alert('Notes sent successfully!');
+            });
+        });
+
+        document.getElementById('receiveNotes').addEventListener('click', () => {
+            peer = new SimplePeer({ initiator: false, trickle: false });
+
+            peer.on('signal', (data) => {
+                alert(`Share this signal with the sender:\n\n${JSON.stringify(data)}`);
+            });
+
+            peer.on('data', (data) => {
+                const receivedNotes = JSON.parse(data.toString());
+                notes = [...notes, ...receivedNotes];
+                saveNotes();
+                renderNotes();
+                alert('Notes received successfully!');
+            });
+        });
+
+        document.getElementById('submitSignal').addEventListener('click', () => {
+            const signal = document.getElementById('signalInput').value;
+            if (signal) {
+                peer.signal(JSON.parse(signal));
             }
         });
 
